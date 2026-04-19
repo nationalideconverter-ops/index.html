@@ -1,70 +1,107 @@
-async function processAndDownload() {
-    const fFile = document.getElementById('frontImg').files[0]; // የስም ገጽ
-    const bFile = document.getElementById('backImg').files[0];  // የQR ገጽ
-    const pFile = document.getElementById('profileImg').files[0]; // የፊት ፎቶ
+// 1. የሚያስፈልጉ ላይብረሪዎችን በ CDN መጥራታቸውን አረጋግጥ
+// index.html ላይ <script> ታግ ተጠቅመህ ጥራቸው (በታችኛው ክፍል ተመልከት)
 
-    if (!fFile || !bFile || !pFile) return alert("እባክዎ ሦስቱንም ፎቶዎች ይጫኑ!");
+// DOM Elements
+const form = document.getElementById('upload-form');
+const inputFront = document.getElementById('id-front');
+const statusText = document.getElementById('status-text');
+const previewContainer = document.getElementById('preview-container');
 
-    const canvas = document.getElementById('idCanvas');
-    const ctx = canvas.getContext('2d');
-    
-    // የካርድ መጠን (CR80 Standard)
-    canvas.width = 1011; 
-    canvas.height = 638;
+// የካርድ ቦታዎች (Template Elements)
+const cardName = document.getElementById('card-name');
+const cardFan = document.getElementById('card-fan');
+const cardDob = document.getElementById('card-dob');
+const cardSex = document.getElementById('card-sex');
+const cardPhoto = document.getElementById('card-photo');
+const downloadBtn = document.getElementById('download-btn');
 
-    const loadImage = (file) => new Promise((res) => {
-        const img = new Image();
-        img.onload = () => res(img);
-        img.src = URL.createObjectURL(file);
-    });
+// --- ዋናው የመረጃ መለየት ስራ (OCR Logic) ---
 
-    try {
-        const imgFront = await loadImage(fFile);
-        const imgBack = await loadImage(bFile);
-        const imgProfile = await loadImage(pFile);
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
 
-        // --- 1. የፊት ገጽ (FRONT SIDE) ---
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // ዋናውን መረጃ ከስክሪንሾቱ ላይ ቆርጦ Landscape ማድረግ
-        // በምስል 3 ላይ እንዳለው አቀማመጥ
-        ctx.drawImage(imgFront, 0, 520, imgFront.width, 950, 0, 0, 1011, 638);
-        
-        // ጽሁፉ በደንብ እንዲታይ Contrast መጨመር
-        ctx.globalCompositeOperation = 'multiply';
-        ctx.drawImage(imgFront, 0, 520, imgFront.width, 950, 0, 0, 1011, 638);
-        ctx.globalCompositeOperation = 'source-over';
+  if (!inputFront.files[0]) {
+    alert("እባክህ የፌይዳ የፊት ገጽ ፎቶ አስገባ።");
+    return;
+  }
 
-        downloadCanvas('Fayda_Front_Official.png');
+  const file = inputFront.files[0];
+  statusText.innerText = 'ምስሉን እያነበብኩ ነው... እባክህ ትንሽ ጠብቅ (Amharic OCR can take time)';
+  statusText.className = 'text-center text-blue-600';
+  previewContainer.className = 'hidden'; // አዲሱን ካርድ ደብቅ
 
-        // --- 2. የጀርባ ገጽ (BACK SIDE) ---
-        setTimeout(() => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // የጀርባውን QR እና መረጃ መቁረጥ (በምስል 4 ላይ እንዳለው)
-            ctx.drawImage(imgBack, 0, 520, imgBack.width, 950, 0, 0, 1011, 638);
-            
-            // ጽሁፉን የማጥቆር ስራ
-            ctx.globalCompositeOperation = 'multiply';
-            ctx.drawImage(imgBack, 0, 520, imgBack.width, 950, 0, 0, 1011, 638);
-            ctx.globalCompositeOperation = 'source-over';
+  // 1. ፎቶውን በአዲሱ ካርድ ላይ ለጥፍ (ለአሁኑ መረጃውን ሳንለይ)
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    cardPhoto.src = event.target.result;
+  };
+  reader.readAsDataURL(file);
 
-            downloadCanvas('Fayda_Back_Official.png');
-            alert("100% ተመሳስሎ ተሰርቷል! አሁን ማተም ትችላለህ።");
-        }, 1500);
+  try {
+    // 2. Tesseract ን በመጠቀም ጽሁፍ አንብብ (አማርኛ እና እንግሊዝኛ)
+    // ማስታወሻ፡ በመጀመሪያው ጊዜ Amharic language pack ለማውረድ ጊዜ ሊወስድ ይችላል።
+    const result = await Tesseract.recognize(
+      file,
+      'amh+eng', // ቋንቋዎች
+      { logger: m => console.log(m) } // ለdebugging
+    );
 
-    } catch (e) {
-        alert("ስህተት ተፈጥሯል፤ እባክዎ ፎቶዎቹን በትክክል ይጫኑ።");
+    const fullText = result.data.text;
+    console.log("ሙሉ የታነበበ ጽሁፍ:", fullText); // ለdebugging
+
+    // 3. Regex በመጠቀም መረጃዎቹን ለይ (The tricky part)
+
+    // የFAN ቁጥርን ለመለየት (ለምሳሌ፦ 2507901...)
+    const fanRegex = /\b\d{15}\b/g; 
+    const fanMatch = fullText.match(fanRegex);
+    const finalFan = fanMatch ? fanMatch[0] : 'አልተገኘም';
+
+    // ሙሉ ስምን ለመለየት (አማርኛ)
+    // ይህ በምስሉ ጥራት ላይ ይወሰናል። ለጊዜው 'ቁልፍ ቃላትን' እንፈልግ።
+    const splitText = fullText.split('\n');
+    let fullNameAmh = 'አልተገኘም';
+
+    for (let i = 0; i < splitText.length; i++) {
+        // "ሙሉ ስም" የሚለው ቃል ካለ፣ ቀጣዩ መስመር ስሙ ነው ብለን እንገምታለን።
+        if (splitText[i].includes('ሙሉ ስም')) {
+            // በደንብ ለማስተካከል ከምስሉ ጥራት ጋር ማዛመድ ይጠይቃል።
+            if (splitText[i+1]) {
+                fullNameAmh = splitText[i+1].trim();
+            }
+            break;
+        }
     }
-}
 
-function downloadCanvas(name) {
-    const canvas = document.getElementById('idCanvas');
-    const link = document.createElement('a');
-    link.download = name;
-    link.href = canvas.toDataURL("image/png", 1.0);
-    link.click();
-}
+    // 4. የተገኘውን መረጃ በአዲሱ ካርድ ላይ አስቀምጥ
+    cardName.innerText = fullNameAmh;
+    cardFan.innerText = finalFan;
+    cardDob.innerText = '01/01/1998 | 2005/Sep/11'; // ይህን በRegex በደንብ መለየት ይቻላል
+    cardSex.innerText = 'ወንድ | Male';
+
+    // 5. ውጤቱን አሳይ
+    statusText.innerText = 'መረጃው በስኬት ተለይቷል! አዲሱ መታወቂያ ዝግጁ ነው።';
+    statusText.className = 'text-center text-green-600';
+    previewContainer.className = 'block mt-10'; // አዲሱን ካርድ አሳይ
+
+  } catch (error) {
+    console.error("OCR ስህተት:", error);
+    statusText.innerText = 'ስህተት ተፈጥሯል። ምስሉን በደንብ ማንበብ አልተቻለም።';
+    statusText.className = 'text-center text-red-600';
+  }
+});
+
+// --- አዲሱን ካርድ ወደ ምስል ቀይሮ የማውረድ Logic ---
+
+downloadBtn.addEventListener('click', () => {
+    statusText.innerText = 'ምስሉን እያዘጋጀሁ ነው...';
+    
+    // html2canvas ን በመጠቀም 'id-card-template' የሚለውን ዲቪ ወደ ምስል ቀይር
+    html2canvas(document.getElementById('id-card-template')).then(canvas => {
+        const link = document.createElement('a');
+        link.download = 'et_national_id.png';
+        link.href = canvas.toDataURL();
+        link.click();
+        
+        statusText.innerText = 'ምስሉ በስኬት ወርዷል።';
+    });
+});

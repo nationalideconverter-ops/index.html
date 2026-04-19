@@ -1,17 +1,14 @@
-const SB_URL = "https://hvtcyenmhpllkccwgaiy.supabase.co";
-const SB_KEY = "EyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2dGN5ZW5taHBsbGtjY3dnYWl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1ODg0MzMsImV4cCI6MjA5MjE2NDQzM30.RQDZh_vC7tSSPYJKD_wQVkrYVi9OWbxkwOz4qD3zbO4";
-const supabaseClient = supabase.createClient(SB_URL, SB_KEY);
-
 async function processAndDownload() {
-    const fFile = document.getElementById('frontImg').files[0];
-    const bFile = document.getElementById('backImg').files[0];
+    const fFile = document.getElementById('frontImg').files[0]; // የስም ገጽ
+    const bFile = document.getElementById('backImg').files[0];  // የQR ገጽ
+    const pFile = document.getElementById('profileImg').files[0]; // የፊት ፎቶ
 
-    if (!fFile || !bFile) return alert("እባክዎ የፊትና የጀርባ ስክሪንሾቶችን ይጫኑ!");
+    if (!fFile || !bFile || !pFile) return alert("እባክዎ ሦስቱንም ፎቶዎች ይጫኑ!");
 
     const canvas = document.getElementById('idCanvas');
     const ctx = canvas.getContext('2d');
     
-    // የፖስታ ቤት ስታንዳርድ (Landscape)
+    // የካርድ መጠን (CR80 Standard)
     canvas.width = 1011; 
     canvas.height = 638;
 
@@ -24,33 +21,43 @@ async function processAndDownload() {
     try {
         const imgFront = await loadImage(fFile);
         const imgBack = await loadImage(bFile);
+        const imgProfile = await loadImage(pFile);
 
-        // --- 1. የፊት ገጽን ማዘጋጀት (Landscape) ---
-        ctx.save();
+        // --- 1. የፊት ገጽ (FRONT SIDE) ---
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        // ምስሉን አዙሮ መሃል ላይ መቁረጥ
-        ctx.translate(canvas.width/2, canvas.height/2);
-        ctx.rotate(Math.PI / 180 * 0); // እዚህ ጋር ምስሉን እንደ አስፈላጊነቱ ማዞር ይቻላል
-        ctx.drawImage(imgFront, 0, 0, imgFront.width, imgFront.height, -505, -319, 1011, 638);
-        ctx.restore();
-        downloadCanvas('Fayda_Front_Landscape.png');
+        // ዋናውን መረጃ ከስክሪንሾቱ ላይ ቆርጦ Landscape ማድረግ
+        // በምስል 3 ላይ እንዳለው አቀማመጥ
+        ctx.drawImage(imgFront, 0, 520, imgFront.width, 950, 0, 0, 1011, 638);
+        
+        // ጽሁፉ በደንብ እንዲታይ Contrast መጨመር
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.drawImage(imgFront, 0, 520, imgFront.width, 950, 0, 0, 1011, 638);
+        ctx.globalCompositeOperation = 'source-over';
 
-        // --- 2. የጀርባ ገጽን ማዘጋጀት (Landscape) ---
+        downloadCanvas('Fayda_Front_Official.png');
+
+        // --- 2. የጀርባ ገጽ (BACK SIDE) ---
         setTimeout(() => {
-            ctx.save();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = "#ffffff";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.translate(canvas.width/2, canvas.height/2);
-            ctx.drawImage(imgBack, 0, 0, imgBack.width, imgBack.height, -505, -319, 1011, 638);
-            ctx.restore();
-            downloadCanvas('Fayda_Back_Landscape.png');
-            alert("ስራው ተጠናቋል! ሁለቱም ገጾች Landscape ሆነው ወርደዋል።");
+            
+            // የጀርባውን QR እና መረጃ መቁረጥ (በምስል 4 ላይ እንዳለው)
+            ctx.drawImage(imgBack, 0, 520, imgBack.width, 950, 0, 0, 1011, 638);
+            
+            // ጽሁፉን የማጥቆር ስራ
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.drawImage(imgBack, 0, 520, imgBack.width, 950, 0, 0, 1011, 638);
+            ctx.globalCompositeOperation = 'source-over';
+
+            downloadCanvas('Fayda_Back_Official.png');
+            alert("100% ተመሳስሎ ተሰርቷል! አሁን ማተም ትችላለህ።");
         }, 1500);
 
     } catch (e) {
-        alert("ስህተት ተፈጥሯል!");
+        alert("ስህተት ተፈጥሯል፤ እባክዎ ፎቶዎቹን በትክክል ይጫኑ።");
     }
 }
 

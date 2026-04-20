@@ -1,82 +1,102 @@
-// በ HTML ውስጥ ያሉ ክፍሎችን መጥራት
+// 1. መቆጣጠሪያዎችን መጥራት
 const frontInput = document.getElementById('frontImg');
 const backInput = document.getElementById('backImg');
 const profileInput = document.getElementById('profileImg');
 const canvas = document.getElementById('idCanvas');
 const ctx = canvas.getContext('2d');
 
+// 2. ዳውንሎድ ቁልፉ ሲጫን የሚሰራ ፋንክሽን
 async function processAndDownload() {
-    // 1. ነጥብ ካለ ማረጋገጥ (ይህ ለወደፊት ከ Supabase ጋር የምታያይዘው ነው)
-    // ለጊዜው ነጥብ ባይኖርም እንዲሰራ እናድርገው
-    
-    if (!frontInput.files[0] || !backInput.files[0] || !profileInput.files[0]) {
-        alert("እባክህ ሶስቱንም ምስሎች (ፊት፣ ጀርባ እና ፕሮፋይል) ጫን!");
+    if (!frontInput.files[0] || !backInput.files[0]) {
+        alert("እባክህ ፊት እና ጀርባ ስክሪንሾቶችን ጫን!");
         return;
     }
 
-    // 2. ምስሎቹን መጫን (Loading Images)
-    const frontImg = await loadImage(URL.createObjectURL(frontInput.files[0]));
-    const backImg = await loadImage(URL.createObjectURL(backInput.files[0]));
-    const profileImg = await loadImage(URL.createObjectURL(profileInput.files[0]));
+    // ጽሁፍ የማንበብ ሂደት (OCR) - ስም እና FAN ቁጥር ለማውጣት
+    const statusText = "እባክህ ትንሽ ጠብቅ... መረጃውን እያነበብኩ ነው";
+    console.log(statusText);
 
-    // 3. በካንቫሱ ላይ መሳል (Drawing)
-    // ካንቫሱን አጽዳ
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    try {
+        const frontFile = frontInput.files[0];
+        const result = await Tesseract.recognize(frontFile, 'amh+eng');
+        const extractedText = result.data.text;
+
+        // መረጃዎቹን ለይቶ ማውጣት (Regex)
+        const fanNumber = extractedText.match(/\b\d{15}\b/)?.[0] || "--- --- ---";
+        const fullName = extractName(extractedText);
+
+        // --- ሀ. የፊት ገጽን መሳል (Front Side) ---
+        await drawFront(frontFile, fullName, fanNumber);
+        downloadCanvas('Fayda_Front.png');
+
+        // --- ለ. የጀርባ ገጽን መሳል (Back Side) ---
+        setTimeout(async () => {
+            await drawBack(backInput.files[0]);
+            downloadCanvas('Fayda_Back.png');
+        }, 1500);
+
+    } catch (error) {
+        console.error("ስህተት ተፈጥሯል:", error);
+        alert("መረጃውን ማንበብ አልተቻለም። እባክህ ምስሉ ጥራት ያለው መሆኑን አረጋግጥ።");
+    }
+}
+
+// --- የፊት ገጽ ዲዛይን (ምስል 3 እንዲሆን) ---
+async function drawFront(file, name, fan) {
+    const img = await loadImage(URL.createObjectURL(file));
+    
+    // 1. ካንቫሱን አጽዳና ነጭ ዳራ አድርግ
     ctx.fillStyle = "white";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // --- ሀ. የፊት ገጽን መሳል (Front Side) ---
-    // ለምሳሌ ከላይ ግማሽ ላይ የፊት ገጹን እናድርገው
-    ctx.drawImage(frontImg, 50, 50, 430, 270); 
+    // 2. ፎቶውን መቁረጥ (Crop Profile Photo)
+    // ስክሪንሾቱ ላይ ፎቶው ያለበትን ግምታዊ ቦታ ቆርጦ አዲሱ ካርድ ላይ ያሳርፋል
+    // (እነዚህን ቁጥሮች እንደ ስክሪንሾቱ መጠን ልታስተካክላቸው ትችላለህ)
+    ctx.drawImage(img, 280, 140, 440, 500, 60, 160, 260, 310);
 
-    // --- ለ. የጀርባ ገጽን መሳል (Back Side) ---
-    // ከፊት ገጹ ጎን ወይም በታች
-    ctx.drawImage(backImg, 530, 50, 430, 270);
-
-    // --- ሐ. ፕሮፋይል/QR ፎቶውን መሳል ---
-    // ይህ ምስል አዲሱ መታወቂያ ላይ እንዲቀመጥ የምትፈልገው ከሆነ
-    ctx.drawImage(profileImg, 50, 350, 430, 270);
-
-    // 4. ምስሉን ለሁለት ከፍሎ ማውረድ (Download)
-    // መጀመሪያ የፊት ገጹን ብቻ የያዘ ምስል አውርድ
-    downloadCanvasSegment(0, 0, 1011, 320, 'Fayda_Front_Print.png');
+    // 3. ጽሁፎችን መጻፍ
+    ctx.fillStyle = "#000";
+    ctx.font = "bold 24px sans-serif";
+    ctx.fillText("ሙሉ ስም | Full Name", 350, 180);
     
-    // ትንሽ ቆይተህ የጀርባውን ክፍል አውርድ
-    setTimeout(() => {
-        downloadCanvasSegment(0, 320, 1011, 320, 'Fayda_Back_Print.png');
-    }, 1000);
+    ctx.font = "bold 32px 'Abyssinica SIL', sans-serif";
+    ctx.fillText(name, 350, 230); // ስሙን እዚህ ጋር ይጽፋል
+
+    ctx.font = "bold 28px monospace";
+    ctx.fillText(fan, 440, 550); // FAN ቁጥር ከባርኮዱ በላይ
 }
 
-// ምስልን ከፋይል ወደ Image Object መቀየሪያ
+// --- የጀርባ ገጽ ዲዛይን (ምስል 4 እንዲሆን) ---
+async function drawBack(file) {
+    const img = await loadImage(URL.createObjectURL(file));
+    
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // QR ኮዱን ከስክሪንሾቱ ላይ ቆርጦ ማውጣት
+    // (ምስል 2 ላይ QR ኮዱ ያለበትን ቦታ ይቆርጣል)
+    ctx.drawImage(img, 80, 120, 850, 600, 420, 120, 520, 450);
+}
+
+// --- ረዳት ፋንክሽኖች ---
+
 function loadImage(url) {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
         const img = new Image();
         img.onload = () => resolve(img);
         img.src = url;
     });
 }
 
-// የተወሰነውን የካንቫስ ክፍል ብቻ ቆርጦ ማውረጃ
-function downloadCanvasSegment(x, y, width, height, fileName) {
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = width;
-    tempCanvas.height = height;
-    const tempCtx = tempCanvas.getContext('2d');
-    
-    tempCtx.drawImage(canvas, x, y, width, height, 0, 0, width, height);
-    
+function downloadCanvas(filename) {
     const link = document.createElement('a');
-    link.download = fileName;
-    link.href = tempCanvas.toDataURL('image/png');
+    link.download = filename;
+    link.href = canvas.toDataURL('image/png');
     link.click();
 }
 
-// የክፍያ ስራ (Payment logic - ለወደፊት የምትሞላው)
-function submitPayment() {
-    const ref = document.getElementById('refInput').value;
-    if (ref.length < 5) {
-        alert("ትክክለኛ የትራንዛክሽን ቁጥር ያስገቡ!");
-        return;
-    }
-    alert("ክፍያዎ ለፍተሻ ተልኳል! ቁጥሩ ሲረጋገጥ ነጥብ ይጨመርልዎታል።");
+function extractName(text) {
+    const lines = text.split('\n');
+    const index = lines.findIndex(l => l.includes("Full Name") || l.includes("ሙሉ ስም"));
+    return lines[index + 1] ? lines[index + 1].trim() : "ያልታወቀ ስም";
 }

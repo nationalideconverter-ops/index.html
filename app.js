@@ -1,72 +1,75 @@
-// OCR ላይብረሪ መጫኑን አረጋግጥ
-const frontInput = document.getElementById('frontImg');
-const backInput = document.getElementById('backImg');
-const canvas = document.getElementById('idCanvas');
-const ctx = canvas.getContext('2d');
+// Supabase Configuration (ቁልፎቹን ከ Supabase Project Settings አምጣቸው)
+const supabaseUrl = 'YOUR_SUPABASE_URL';
+const supabaseKey = 'YOUR_SUPABASE_ANON_KEY';
+const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
-// ይህ ፋንክሽን ነው ዋናውን ስራ የሚሰራው
 async function processAndDownload() {
-    if (!frontInput.files[0]) {
-        alert("እባክህ መጀመሪያ ስክሪንሾቱን ጫን!");
+    const frontInput = document.getElementById('frontImg').files[0];
+    const backInput = document.getElementById('backImg').files[0];
+    const profileInput = document.getElementById('profileImg').files[0];
+
+    if (!frontInput || !backInput) {
+        alert("እባክህ የፊት እና የጀርባ ምስሎችን አስገባ!");
         return;
     }
 
-    const file = frontInput.files[0];
-    
-    // 1. መረጃውን አንብብ (OCR)
-    const result = await Tesseract.recognize(file, 'amh+eng');
-    const text = result.data.text;
-    
-    // መረጃዎችን ለይተን እናውጣ (Regex)
-    const fan = text.match(/\b\d{15}\b/)?.[0] || "--- --- ---";
-    const nameAmh = extractAmharicName(text); // ስም መፈለጊያ ፋንክሽን
+    // 1. የፊት ገጹን ማዘጋጀት (Front Side)
+    const frontCanvas = document.createElement('canvas');
+    await processSide(frontCanvas, frontInput, "FRONT");
+    downloadCanvas(frontCanvas, "Fayda_Front.png");
 
-    // 2. አዲሱን ካርድ መሳል (Template 3/4)
-    drawFrontCard(nameAmh, fan, file);
+    // 2. የጀርባ ገጹን ማዘጋጀት (Back Side)
+    const backCanvas = document.createElement('canvas');
+    await processSide(backCanvas, backInput, "BACK");
+    downloadCanvas(backCanvas, "Fayda_Back.png");
 }
 
-function drawFrontCard(name, fan, photoFile) {
-    // ካንቫሱን አጽዳ
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // ሀ. ዳራውን (Background) ሳል - እንደ ምስል 3
-    ctx.fillStyle = "#f0f9ff"; // ለስላሳ ሰማያዊ
+async function processSide(canvas, file, side) {
+    const ctx = canvas.getContext('2d');
+    canvas.width = 1011; // Standard ID Width
+    canvas.height = 638; // Standard ID Height
+
+    const img = await loadImage(file);
+
+    // ነጭ ባግራውንድ መሳል
+    ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // ለ. ባንዲራ እና ሎጎዎችን ጨምር
-    // ctx.drawImage(flagImg, 20, 20, 80, 50);
 
-    // ሐ. ጽሁፎችን በትክክለኛው ቦታ ጻፍ (ይህ ነው ትልቁ ልዩነት!)
-    ctx.fillStyle = "black";
-    ctx.font = "bold 30px 'Abyssinica SIL', sans-serif";
-    ctx.fillText("ሙሉ ስም | Full Name", 380, 150);
-    ctx.fillText(name, 380, 190); // ስሙን እዚህ ቦታ ላይ ይጽፈዋል
-    
-    ctx.font = "bold 25px monospace";
-    ctx.fillText("FAN: " + fan, 380, 500); // FAN ቁጥሩን እዚህ ጋር
-
-    // መ. ፎቶውን ከስክሪንሾቱ ላይ ቆርጦ ማውጣት
-    const img = new Image();
-    img.src = URL.createObjectURL(photoFile);
-    img.onload = () => {
-        // ፎቶውን ብቻ ቆርጦ (Crop) ካርዱ ላይ ያሳርፈዋል
-        ctx.drawImage(img, 100, 150, 250, 300, 50, 150, 250, 300);
-        
-        // ለመውረድ ዝግጁ ነው
-        downloadImage();
-    };
+    if (side === "FRONT") {
+        // ከቁም ምስሉ ላይ መረጃ ያለበትን መካከለኛ ክፍል ቆርጦ አግድም ማድረግ
+        // drawImage(image, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight)
+        // እነዚህ ቁጥሮች (50, 400...) እንደ ስክሪንሾቱ መጠን ሊስተካከሉ ይችላሉ
+        ctx.drawImage(img, 50, 450, 900, 600, 0, 0, 1011, 638);
+    } else {
+        // ለጀርባውም እንደዚሁ መካከለኛውን የ QR ክፍል መቁረጥ
+        ctx.drawImage(img, 50, 50, 900, 600, 0, 0, 1011, 638);
+    }
 }
 
-function downloadImage() {
+function loadImage(file) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function downloadCanvas(canvas, filename) {
     const link = document.createElement('a');
-    link.download = 'fayda_custom_card.png';
-    link.href = canvas.toDataURL();
+    link.download = filename;
+    link.href = canvas.toDataURL('image/png', 1.0);
     link.click();
 }
 
-// ስምን ለመለየት የሚረዳ ቀላል ፋንክሽን
-function extractAmharicName(text) {
-    const lines = text.split('\n');
-    const index = lines.findIndex(l => l.includes("Full Name") || l.includes("ሙሉ ስም"));
-    return lines[index + 1] ? lines[index + 1].trim() : "ያልታወቀ ስም";
+// ክፍያ ለማረጋገጥ (ለጊዜው ለሙከራ)
+function submitPayment() {
+    const ref = document.getElementById('refInput').value;
+    if(ref.length > 5) {
+        alert("ማረጋገጫው ተልኳል! በአጭር ጊዜ ውስጥ ፖይንት ይጨመርልዎታል።");
+        document.getElementById('pointsDisplay').innerText = "Points: 10";
+    }
 }

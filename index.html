@@ -1,111 +1,50 @@
 <!DOCTYPE html>
-<html lang="am">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fayda ID Editor Pro</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <style>
-        body { background-color: #050505; color: white; }
-        canvas { border: 1px solid #333; border-radius: 10px; }
-        .controls button { background: #1e293b; padding: 10px; border-radius: 8px; font-weight: bold; }
+        .container { display: flex; flex-direction: column; align-items: center; background: #000; color: white; padding: 20px; }
+        canvas { border: 2px solid #333; margin-bottom: 20px; }
+        .btn { background: #3b82f6; padding: 15px 30px; border-radius: 10px; font-weight: bold; cursor: pointer; }
     </style>
 </head>
-<body class="p-4">
-    <h1 class="text-center text-blue-500 font-black text-2xl mb-6">FAYDA GEN PRO</h1>
-
-    <div class="max-w-xl mx-auto space-y-6">
-        <div class="bg-zinc-900 p-4 rounded-2xl">
-            <label class="block text-sm mb-2">የፋይዳ ስክሪንሾት ይምረጡ</label>
-            <input type="file" id="imageLoader" class="w-full text-sm text-gray-400">
-        </div>
-
-        <div class="relative flex justify-center">
-            <canvas id="idCanvas"></canvas>
-        </div>
-
-        <div class="controls grid grid-cols-3 gap-2">
-            <button onclick="zoomIn()">Zoom +</button>
-            <button onclick="zoomOut()">Zoom -</button>
-            <button onclick="rotate()">Rotate ↻</button>
-        </div>
-
-        <button onclick="downloadID()" class="w-full bg-blue-600 py-4 rounded-2xl font-bold text-lg shadow-lg">
-            ለህትመት አዘጋጅና አውርድ (Download)
-        </button>
-    </div>
+<body class="container">
+    <input type="file" id="imgLoader" style="margin-bottom: 20px;">
+    <canvas id="c" width="1011" height="638"></canvas>
+    <button class="btn" onclick="download()">አውርድ (Download)</button>
 
     <script>
-        // 1. ካንቫሱን ማዘጋጀት (መጠኑን 1011x638 አድርገነዋል ለጥራት)
-        const canvas = new fabric.Canvas('idCanvas', {
-            width: 350,  // በስልክ እንዲታይ ትንሽ እናድርገው
-            height: 220,
-            backgroundColor: '#fff'
-        });
+        var canvas = new fabric.Canvas('c');
+        var frameUrl = 'https://nationalidconvertor.com/images/front-fayda-new.png';
 
-        const ID_WIDTH = 1011;
-        const ID_HEIGHT = 638;
-
-        // 2. የካርድ ፍሬሙን መጫን (ይህ ምስል መሃሉ ክፍት መሆን አለበት)
-        let overlayFrame;
-        fabric.Image.fromURL('https://your-domain.com/frame-front.png', function(img) {
-            overlayFrame = img;
-            img.set({
+        // 1. ባዶውን ፍሬም ከላይ መጫን
+        fabric.Image.fromURL(frameUrl, function(img) {
+            canvas.setOverlayImage(img, canvas.renderAll.bind(canvas), {
                 scaleX: canvas.width / img.width,
-                scaleY: canvas.height / img.height,
-                selectable: false,
-                evented: false
+                scaleY: canvas.height / img.height
             });
-            canvas.add(img);
         });
 
-        // 3. ተጠቃሚው ምስል ሲጭን
-        document.getElementById('imageLoader').onchange = function(e) {
-            const reader = new FileReader();
+        // 2. ተጠቃሚው ፎቶ ሲጭን
+        document.getElementById('imgLoader').onchange = function(e) {
+            var reader = new FileReader();
             reader.onload = function(event) {
-                const imgObj = new Image();
+                var imgObj = new Image();
                 imgObj.src = event.target.result;
                 imgObj.onload = function() {
-                    const idImg = new fabric.Image(imgObj);
-                    idImg.set({
-                        left: 50,
-                        top: 50,
-                        scaleX: 0.2,
-                        scaleY: 0.2
-                    });
-                    canvas.add(idImg);
-                    canvas.sendToBack(idImg); // ፎቶው ከፍሬሙ ስር እንዲሆን
-                    canvas.setActiveObject(idImg);
+                    var image = new fabric.Image(imgObj);
+                    image.scale(0.5);
+                    canvas.add(image);
+                    canvas.sendToBack(image); // ፎቶው ከፍሬሙ ስር እንዲሆን
                 }
             }
             reader.readAsDataURL(e.target.files[0]);
         };
 
-        // 4. ፋንክሽኖች
-        function zoomIn() { 
-            const obj = canvas.getActiveObject();
-            if(obj) { obj.scale(obj.scaleX * 1.1); canvas.renderAll(); }
-        }
-        function zoomOut() { 
-            const obj = canvas.getActiveObject();
-            if(obj) { obj.scale(obj.scaleX * 0.9); canvas.renderAll(); }
-        }
-        function rotate() { 
-            const obj = canvas.getActiveObject();
-            if(obj) { obj.rotate(obj.angle + 90); canvas.renderAll(); }
-        }
-
-        // 5. ማውረጃ
-        function downloadID() {
-            // ለማውረድ መጠኑን ወደ ትልቁ (1011x638) እንቀይረዋለን
-            const dataURL = canvas.toDataURL({
-                format: 'png',
-                multiplier: 1011 / canvas.width // ትክክለኛውን ጥራት ለመጠበቅ
-            });
-            const link = document.createElement('a');
-            link.download = 'Fayda_Card.png';
-            link.href = dataURL;
+        function download() {
+            var link = document.createElement('a');
+            link.download = 'Fayda_ID.png';
+            link.href = canvas.toDataURL({ format: 'png', quality: 1 });
             link.click();
         }
     </script>

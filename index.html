@@ -3,59 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fayda ID Printer Pro</title>
+    <title>Fayda ID Editor Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <style>
-        body { background-color: #050505; color: white; font-family: sans-serif; }
-        .card-panel { background: #111; border: 1px solid #222; border-radius: 1.5rem; }
-        .input-style { background: #000; border: 1px solid #333; width: 100%; padding: 0.8rem; border-radius: 0.8rem; color: white; outline: none; }
-        .input-style:focus { border-color: #3b82f6; }
+        body { background-color: #050505; color: white; }
+        canvas { border: 1px solid #333; border-radius: 10px; }
+        .controls button { background: #1e293b; padding: 10px; border-radius: 8px; font-weight: bold; }
     </style>
 </head>
-<body class="p-4 pb-20">
+<body class="p-4">
+    <h1 class="text-center text-blue-500 font-black text-2xl mb-6">FAYDA GEN PRO</h1>
 
-    <div class="flex justify-between items-center py-4 mb-6">
-        <h1 class="text-xl font-black italic text-blue-500">FAYDA GEN</h1>
-        <div id="pointsDisplay" class="bg-blue-900/30 text-blue-400 px-4 py-1 rounded-full text-sm border border-blue-800">
-            Points: 0
+    <div class="max-w-xl mx-auto space-y-6">
+        <div class="bg-zinc-900 p-4 rounded-2xl">
+            <label class="block text-sm mb-2">የፋይዳ ስክሪንሾት ይምረጡ</label>
+            <input type="file" id="imageLoader" class="w-full text-sm text-gray-400">
         </div>
-    </div>
 
-    <div class="card-panel p-6 mb-6">
-        <h2 class="text-orange-500 font-bold mb-1">ብር ለመላክ / Buy Points</h2>
-        <p class="text-xs text-gray-500 mb-4">ለ 0974732536 በቴሌብር ልከው የትራንዛክሽን ቁጥሩን ያስገቡ</p>
-        <input type="text" id="refInput" placeholder="Transaction ID (e.g. CKM...)" class="input-style mb-4">
-        <button onclick="submitPayment()" class="w-full bg-white text-black font-bold py-3 rounded-xl active:scale-95 transition">
-            Confirm Payment
+        <div class="relative flex justify-center">
+            <canvas id="idCanvas"></canvas>
+        </div>
+
+        <div class="controls grid grid-cols-3 gap-2">
+            <button onclick="zoomIn()">Zoom +</button>
+            <button onclick="zoomOut()">Zoom -</button>
+            <button onclick="rotate()">Rotate ↻</button>
+        </div>
+
+        <button onclick="downloadID()" class="w-full bg-blue-600 py-4 rounded-2xl font-bold text-lg shadow-lg">
+            ለህትመት አዘጋጅና አውርድ (Download)
         </button>
     </div>
 
-    <div class="card-panel p-6">
-        <h2 class="font-bold mb-4">የመታወቂያ ስክሪንሾቶችን ይጫኑ</h2>
-        
-        <div class="space-y-4">
-            <div>
-                <label class="block text-xs text-gray-500 mb-1 font-bold">FRONT SIDE (የፊት ገጽ)</label>
-                <input type="file" id="frontImg" accept="image/*" class="text-sm">
-            </div>
-            <div>
-                <label class="block text-xs text-gray-500 mb-1 font-bold">BACK SIDE (የጀርባ ገጽ)</label>
-                <input type="file" id="backImg" accept="image/*" class="text-sm">
-            </div>
-            <div>
-                <label class="block text-xs text-gray-500 mb-1 font-bold">PROFILE/QR (ፕሮፋይል)</label>
-                <input type="file" id="profileImg" accept="image/*" class="text-sm">
-            </div>
-            
-            <button onclick="processAndDownload()" class="w-full bg-blue-600 font-bold py-4 rounded-xl mt-4 shadow-lg shadow-blue-900/20 active:scale-95 transition">
-                ለህትመት አዘጋጅ (Download)
-            </button>
-        </div>
-    </div>
+    <script>
+        // 1. ካንቫሱን ማዘጋጀት (መጠኑን 1011x638 አድርገነዋል ለጥራት)
+        const canvas = new fabric.Canvas('idCanvas', {
+            width: 350,  // በስልክ እንዲታይ ትንሽ እናድርገው
+            height: 220,
+            backgroundColor: '#fff'
+        });
 
-    <canvas id="idCanvas" width="1011" height="638" style="display:none;"></canvas>
+        const ID_WIDTH = 1011;
+        const ID_HEIGHT = 638;
 
-    <script src="app.js"></script>
+        // 2. የካርድ ፍሬሙን መጫን (ይህ ምስል መሃሉ ክፍት መሆን አለበት)
+        let overlayFrame;
+        fabric.Image.fromURL('https://your-domain.com/frame-front.png', function(img) {
+            overlayFrame = img;
+            img.set({
+                scaleX: canvas.width / img.width,
+                scaleY: canvas.height / img.height,
+                selectable: false,
+                evented: false
+            });
+            canvas.add(img);
+        });
+
+        // 3. ተጠቃሚው ምስል ሲጭን
+        document.getElementById('imageLoader').onchange = function(e) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const imgObj = new Image();
+                imgObj.src = event.target.result;
+                imgObj.onload = function() {
+                    const idImg = new fabric.Image(imgObj);
+                    idImg.set({
+                        left: 50,
+                        top: 50,
+                        scaleX: 0.2,
+                        scaleY: 0.2
+                    });
+                    canvas.add(idImg);
+                    canvas.sendToBack(idImg); // ፎቶው ከፍሬሙ ስር እንዲሆን
+                    canvas.setActiveObject(idImg);
+                }
+            }
+            reader.readAsDataURL(e.target.files[0]);
+        };
+
+        // 4. ፋንክሽኖች
+        function zoomIn() { 
+            const obj = canvas.getActiveObject();
+            if(obj) { obj.scale(obj.scaleX * 1.1); canvas.renderAll(); }
+        }
+        function zoomOut() { 
+            const obj = canvas.getActiveObject();
+            if(obj) { obj.scale(obj.scaleX * 0.9); canvas.renderAll(); }
+        }
+        function rotate() { 
+            const obj = canvas.getActiveObject();
+            if(obj) { obj.rotate(obj.angle + 90); canvas.renderAll(); }
+        }
+
+        // 5. ማውረጃ
+        function downloadID() {
+            // ለማውረድ መጠኑን ወደ ትልቁ (1011x638) እንቀይረዋለን
+            const dataURL = canvas.toDataURL({
+                format: 'png',
+                multiplier: 1011 / canvas.width // ትክክለኛውን ጥራት ለመጠበቅ
+            });
+            const link = document.createElement('a');
+            link.download = 'Fayda_Card.png';
+            link.href = dataURL;
+            link.click();
+        }
+    </script>
 </body>
 </html>
